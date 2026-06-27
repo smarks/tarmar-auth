@@ -1,0 +1,9 @@
+{% extends "tarmar_auth/base.html" %}
+{% block title %}{{ request.user.username }}{% endblock %}
+{% block content %}
+<h1>{{ request.user.username }}</h1>
+{% if request.user.email %}<p>{{ request.user.email }}</p>{% endif %}
+<form method="post" action="{% url 'tarmar_auth:logout' %}">{% csrf_token %}
+  <button type="submit">Log out</button>
+</form>
+{% endblock %}
