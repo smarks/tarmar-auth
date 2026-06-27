@@ -6,6 +6,52 @@ Django login app that **melee** already uses; the question is whether/how
 
 ---
 
+## §-1. Treat tarmar-auth (and tarmar-common) as versioned libraries — read first
+
+These packages are **libraries**. Consume them as **pinned, non-editable git
+dependencies**, each project in its **own environment**. Never `@main`, never
+`pip install -e`.
+
+**Why this is not optional.** melee and tarmar-studio can share one global
+Python. An editable install (`pip install -e ../tarmar-auth`) makes a consumer
+ride the *live working tree*, so one project's in-progress edits leak into the
+others. This already bit us: while tarmar-auth was being rebuilt into the rich
+shared library, melee — which had it editable-installed — crashed with
+`ModuleNotFoundError: No module named 'tarmar_common'` the moment the new import
+landed in the working tree. The fix was to pin melee to a release tag and install
+it non-editable.
+
+**The version situation (it has shifted — mind the divergence):**
+
+| Version | What it is | Who uses it |
+|---|---|---|
+| **`v0.1.0`** (commit `64635899`) | the **old, minimal** `User(AbstractUser)` + register/login/logout/profile app | **melee** pins this today |
+| the working tree / future **`main`** | the **rich** shared library — `AbstractTarmarUser` (studio-grade user: roles + profile fields), split `base.py`/`models.py`, full views, and a new dependency on the sibling package **`tarmar-common`** | tarmar-studio (target), not yet tagged |
+
+So:
+
+1. **tarmar-studio consumes both `tarmar-auth` and `tarmar-common` as pinned,
+   non-editable deps** (`@vX.Y.Z`), installed into **its own environment**
+   (venv / project-local). Never `@main`, never `-e`. Same rule for melee.
+2. **When the rich tarmar-auth is committed/pushed, tag it `v0.2.0`** — and tag
+   **`tarmar-common`** too (it's a real dependency; pin it by tag as well).
+   Don't let consumers pick up the rich version implicitly via `@main`.
+3. **melee's eventual move to the rich version is a deliberate `v0.1.0 → v0.2.0`
+   bump** (the planned additive-migration step in §3 Option B), reviewed and
+   tested — never an accident from `@main` or a stray editable install.
+4. **Developing tarmar-auth itself** is the *one* place `-e` is fine — but only
+   inside tarmar-auth's **own** isolated venv. Cut a release + tag, then bump each
+   consumer's pin. Never editable-install it into an env that other projects use.
+
+Recovery, if a shared env gets clobbered back to an editable/WIP install:
+
+```bash
+pip install --force-reinstall --no-deps \
+  "tarmar-auth @ git+https://github.com/smarks/tarmar-auth.git@v0.1.0"   # or the consumer's pinned tag
+```
+
+---
+
 ## 0. The one constraint that drives every decision
 
 **tarmar-studio is already deployed with its own custom user model.** Its
